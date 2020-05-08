@@ -408,7 +408,7 @@ FMetalRHIImmediateCommandContext ImmediateContext;
 ### OpenGL
 
 ```
-class OPENGLDRV_API FOpenGLDynamicRHI  final : public FDynamicRHI, public IRHICommandContextPSOFallback
+class OPENGLDRV_API FOpenGLDynamicRHI final : public FDynamicRHI, public IRHICommandContextPSOFallback
 {
 
 }
@@ -524,6 +524,110 @@ void FD3D12DescriptorCache::SetVertexBuffers(FD3D12VertexBufferCache& Cache)
 }
 
 D3D12的StateCache, D3D12Allocator需要研究。D3D12交给用户负责资源的管理。这个需要深入研究。
+```
+
+
+### Context、Device等
+```
+class IRHIComputeContext;
+class IRHICommandContext : public IRHIComputeContext;
+class IRHICommandContextPSOFallback : public IRHICommandContext;
+
+class OPENGLDRV_API FOpenGLDynamicRHI  final : public FDynamicRHI, public IRHICommandContextPSOFallback;
+class D3D11RHI_API FD3D11DynamicRHI : public FDynamicRHI, public IRHICommandContextPSOFallback;
+
+class FMetalRHICommandContext : public IRHICommandContext
+{
+	virtual void RHISetComputeShader(FRHIComputeShader* ComputeShader) override;
+	virtual void RHISetComputePipelineState(FRHIComputePipelineState* ComputePipelineState) override;
+}
+class FMetalRHIImmediateCommandContext : public FMetalRHICommandContext;
+FMetalRHIImmediateCommandContext ImmediateContext;
+IRHICommandContext* FMetalDynamicRHI::RHIGetDefaultContext()
+{
+	return &ImmediateContext;
+}
+
+class FD3D12CommandContextBase : public IRHICommandContext, public FD3D12AdapterChild;
+class FD3D12CommandContext : public FD3D12CommandContextBase, public FD3D12DeviceChild;
+
+IRHICommandContext* FD3D12DynamicRHI::RHIGetDefaultContext()
+{
+	FD3D12Adapter& Adapter = GetAdapter();
+
+	IRHICommandContext* DefaultCommandContext = nullptr;	
+	if (GNumExplicitGPUsForRendering > 1)
+	{
+		DefaultCommandContext = static_cast<IRHICommandContext*>(&Adapter.GetDefaultContextRedirector());
+	}
+	else // Single GPU path
+	{
+		FD3D12Device* Device = Adapter.GetDevice(0);
+		DefaultCommandContext = static_cast<IRHICommandContext*>(&Device->GetDefaultCommandContext());
+	}
+
+	check(DefaultCommandContext);
+	return DefaultCommandContext;
+}
+
+class FD3D12Adapter : public FNoncopyable
+{
+	// Each of these devices represents a physical GPU 'Node'
+	FD3D12Device* Devices[MAX_NUM_GPUS];
+}
+
+void FD3D12DynamicRHIModule::FindAdapter()创建D3D12的Adaptor。
+FD3D12DynamicRHI::Init()中调用Adapter->InitializeDevices(); 在这里创建和初始化devices。
+			Devices[GPUIndex] = new FD3D12Device(FRHIGPUMask::FromIndex(GPUIndex), this);
+			Devices[GPUIndex]->Initialize();
+
+				CreateCommandContexts();
+						const uint32 NumContexts = FTaskGraphInterface::Get().GetNumWorkerThreads() + 1;
+						CommandContextArray.Reserve(NumContexts);
+			
+
+class FD3D12Device
+{
+	void CreateCommandContexts();
+	inline FD3D12CommandListManager& GetCommandListManager() { return *CommandListManager; }
+	inline FD3D12CommandListManager& GetCopyCommandListManager() { return *CopyCommandListManager; }
+	inline FD3D12CommandListManager& GetAsyncCommandListManager() { return *AsyncCommandListManager; }
+}
+
+FDynamicRHI* PlatformCreateDynamicRHI()
+FDynamicRHI* FD3D12DynamicRHIModule::CreateRHI(ERHIFeatureLevel::Type RequestedFeatureLevel)
+
+D3D11Device.cpp里是D3D11DynamicRHI的init实现，OpenGL的也是。
+Metal没有Device的概念。
+
+
+
+
+UE4Editor-D3D11RHI.dll!FD3D11DynamicRHI::Init() 行 929	C++
+UE4Editor-RHI.dll!RHIInit(bool bHasEditorToken) 行 215	C++
+UE4Editor.exe!FEngineLoop::PreInitPreStartupScreen(const wchar_t * CmdLine) 行 2273	C++
+[内联框架] UE4Editor.exe!FEngineLoop::PreInit(const wchar_t *) 行 3274	C++
+[内联框架] UE4Editor.exe!EnginePreInit(const wchar_t *) 行 42	C++
+UE4Editor.exe!GuardedMain(const wchar_t * CmdLine, HINSTANCE__ * hInInstance, HINSTANCE__ * hPrevInstance, int nCmdShow) 行 131	C++
+UE4Editor.exe!WinMain(HINSTANCE__ * hInInstance, HINSTANCE__ * hPrevInstance, char * __formal, int nCmdShow) 行 252	C++
+
+void FD3D11DynamicRHI::Init()
+{
+	InitD3DDevice();
+#if PLATFORM_DESKTOP
+	GSupportsDepthBoundsTest = (IsRHIDeviceNVIDIA() || IsRHIDeviceAMD());
+#else
+	GSupportsDepthBoundsTest = false;
+#endif
+}
+
+
+void RHIInit(bool bHasEditorToken)
+{
+	GRHICommandList.GetImmediateCommandList().SetContext(GDynamicRHI->RHIGetDefaultContext());
+	GRHICommandList.GetImmediateAsyncComputeCommandList().SetComputeContext(GDynamicRHI->RHIGetDefaultAsyncComputeContext());
+}
+
 ```
 
 ### 官方文档

@@ -8,6 +8,8 @@ RHI结构的文章中里讲到了，RHICommandList通过执行GetContext()->SetT
 ### FRHICommandListBase
 主要做的是同步对命令的分配等相关的工作。
 ```
+class RHI_API FRHICommandListBase : public FNoncopyable
+
 void QueueAsyncCommandListSubmit(FGraphEventRef& AnyThreadCompletionEvent, class FRHICommandList* CmdList);
 void QueueParallelAsyncCommandListSubmit(FGraphEventRef* AnyThreadCompletionEvents, bool bIsPrepass, class FRHICommandList** CmdLists, int32* NumDrawsIfKnown, int32 Num, int32 MinDrawsPerTranslate, bool bSpewMerge);
 void QueueRenderThreadCommandListSubmit(FGraphEventRef& RenderThreadCompletionEvent, class FRHICommandList* CmdList);
@@ -59,9 +61,265 @@ private:
 	friend class FRHICommandListScopedFlushAndExecute;
 ```
 
+### FRHICommandList
+```
+class RHI_API FRHICommandList : public FRHICommandListBase
+{
+public:
+    template <typename TShaderRHI>
+	FORCEINLINE_DEBUGGABLE void SetShaderParameter(TShaderRHI* Shader, uint32 BufferIndex, uint32 BaseIndex, uint32 NumBytes, const void* NewValue)
+	{
+		//check(IsOutsideRenderPass());
+		if (Bypass())
+		{
+			GetContext().RHISetShaderParameter(Shader, BufferIndex, BaseIndex, NumBytes, NewValue);
+			return;
+		}
+		void* UseValue = Alloc(NumBytes, 16);
+		FMemory::Memcpy(UseValue, NewValue, NumBytes);
+		ALLOC_COMMAND(FRHICommandSetShaderParameter<TShaderRHI, ECmdList::EGfx>)(Shader, BufferIndex, BaseIndex, NumBytes, UseValue);
+	}
+}
+
+	FORCEINLINE_DEBUGGABLE void DrawPrimitive(uint32 BaseVertexIndex, uint32 NumPrimitives, uint32 NumInstances)
+	{
+		//check(IsOutsideRenderPass());
+		if (Bypass())
+		{
+			GetContext().RHIDrawPrimitive(BaseVertexIndex, NumPrimitives, NumInstances);
+			return;
+		}
+		ALLOC_COMMAND(FRHICommandDrawPrimitive)(BaseVertexIndex, NumPrimitives, NumInstances);
+	}
+
+    FORCEINLINE_DEBUGGABLE void SetGraphicsPipelineState(class FGraphicsPipelineState* GraphicsPipelineState)
+	{
+		//check(IsOutsideRenderPass());
+		if (Bypass())
+		{
+			extern RHI_API FRHIGraphicsPipelineState* ExecuteSetGraphicsPipelineState(class FGraphicsPipelineState* GraphicsPipelineState);
+			FRHIGraphicsPipelineState* RHIGraphicsPipelineState = ExecuteSetGraphicsPipelineState(GraphicsPipelineState);
+			GetContext().RHISetGraphicsPipelineState(RHIGraphicsPipelineState);
+			return;
+		}
+		ALLOC_COMMAND(FRHICommandSetGraphicsPipelineState)(GraphicsPipelineState);
+	}
+```
+
+### VertexBuffer的Create和Lock
+```
+FVertexBufferRHIRef FOpenGLDynamicRHI::RHICreateVertexBuffer(uint32 Size, uint32 InUsage, FRHIResourceCreateInfo& CreateInfo)
+{
+	const void *Data = NULL;
+
+	// If a resource array was provided for the resource, create the resource pre-populated
+	if(CreateInfo.ResourceArray)
+	{
+		check(Size == CreateInfo.ResourceArray->GetResourceDataSize());
+		Data = CreateInfo.ResourceArray->GetResourceData();
+	}
+
+	TRefCountPtr<FOpenGLVertexBuffer> VertexBuffer = new FOpenGLVertexBuffer(0, Size, InUsage, Data);
+	
+	if (CreateInfo.ResourceArray)
+	{
+		CreateInfo.ResourceArray->Discard();
+	}
+	
+	return VertexBuffer.GetReference();
+}
+
+TOpenGLBuffer(uint32 InStride,uint32 InSize,uint32 InUsage,
+		const void *InData = NULL, bool bStreamedDraw = false, GLuint ResourceToUse = 0, uint32 ResourceSize = 0)
+	: BaseType(InStride,InSize,InUsage)
+	, Resource(0)
+	, ModificationCount(0)
+	, bIsLocked(false)
+	, bIsLockReadOnly(false)
+	, bStreamDraw(bStreamedDraw)
+	, bLockBufferWasAllocated(false)
+	, LockSize(0)
+	, LockOffset(0)
+	, LockBuffer(NULL)
+	, RealSize(InSize)
+	{
+
+		RealSize = ResourceSize ? ResourceSize : InSize;
+
+		if( (FOpenGL::SupportsVertexAttribBinding() && OpenGLConsoleVariables::bUseVAB) || !( InUsage & BUF_ZeroStride ) )
+		{
+			FRHICommandListImmediate& RHICmdList = FRHICommandListExecutor::GetImmediateCommandList();
+
+			if (ShouldRunGLRenderContextOpOnThisThread(RHICmdList))
+			{
+				CreateGLBuffer(InData, ResourceToUse, ResourceSize);
+			}
+			else
+			{
+				void* BuffData = nullptr;
+				if (InData)
+				{
+					BuffData = RHICmdList.Alloc(RealSize, 16);
+					FMemory::Memcpy(BuffData, InData, RealSize);
+				}
+				TransitionFence.Reset();
+				ALLOC_COMMAND_CL(RHICmdList, FRHICommandGLCommand)([=]() 
+				{
+					CreateGLBuffer(BuffData, ResourceToUse, ResourceSize); 
+					TransitionFence.WriteAssertFence();
+				});
+				TransitionFence.SetRHIThreadFence();
+
+			}
+		}
+	}
+
+
+
+void* FOpenGLDynamicRHI::LockVertexBuffer_BottomOfPipe(FRHICommandListImmediate& RHICmdList, FRHIVertexBuffer* VertexBufferRHI, uint32 Offset, uint32 Size, EResourceLockMode LockMode)
+{
+	check(Size > 0);
+	RHITHREAD_GLCOMMAND_PROLOGUE();
+
+	VERIFY_GL_SCOPE();
+	FOpenGLVertexBuffer* VertexBuffer = ResourceCast(VertexBufferRHI);
+	if( !(FOpenGL::SupportsVertexAttribBinding() && OpenGLConsoleVariables::bUseVAB) && VertexBuffer->GetUsage() & BUF_ZeroStride )
+	{
+		check( Offset + Size <= VertexBuffer->GetSize() );
+		// We assume we are only using the first elements from the VB, so we can later on read this memory and create an expanded version of this zero stride buffer
+		check(Offset == 0);
+		return (void*)( (uint8*)VertexBuffer->GetZeroStrideBuffer() + Offset );
+	}
+	else
+	{
+		if (VertexBuffer->IsDynamic() && LockMode == EResourceLockMode::RLM_WriteOnly)
+		{
+			void *Staging = GetAllocation(VertexBuffer, Size, Offset);
+			if (Staging)
+			{
+				return Staging;
+			}
+		}
+		return (void*)VertexBuffer->Lock(Offset, Size, LockMode == EResourceLockMode::RLM_ReadOnly, VertexBuffer->IsDynamic());
+	}
+	RHITHREAD_GLCOMMAND_EPILOGUE_RETURN(void*);
+}
+
+#define RHITHREAD_GLCOMMAND_PROLOGUE() auto GLCommand= [&]() {
+
+#define RHITHREAD_GLCOMMAND_EPILOGUE_RETURN(x) };\
+    if (RHICmdList.Bypass() ||  !IsRunningRHIInSeparateThread() || IsInRHIThread())\
+    {\
+        return GLCommand();\
+    }\
+    else\
+    {\
+        x ReturnValue = (x)0;\
+        ALLOC_COMMAND_CL(RHICmdList, FRHICommandGLCommand)([&ReturnValue, GLCommand = MoveTemp(GLCommand)]() { ReturnValue = GLCommand(); }); \
+        RHITHREAD_GLTRACE_BLOCKING;\
+        RHICmdList.ImmediateFlush(EImmediateFlushType::FlushRHIThread);\
+        return ReturnValue;\
+    }\
+
+
+case EImmediateFlushType::FlushRHIThread:
+{
+    CSV_SCOPED_TIMING_STAT(RHITFlushes, FlushRHIThreadTotal);
+    if (HasCommands())
+    {
+        GRHICommandList.ExecuteList(*this);
+    }
+    WaitForDispatch();
+    if (IsRunningRHIInSeparateThread())
+    {
+        WaitForRHIThreadTasks();
+    }
+    WaitForTasks(true); // these are already done, but this resets the outstanding array
+}
+break;
+```
+
 ### FRHICommandListImmediate
 对应DX12中的D3D12_COMMAND_LIST_TYPE_DIRECT，跟渲染相关的命令。
 ``` c++
+
+void* FOpenGLDynamicRHI::LockVertexBuffer_BottomOfPipe(FRHICommandListImmediate& RHICmdList, FRHIVertexBuffer* VertexBufferRHI, uint32 Offset, uint32 Size, EResourceLockMode LockMode)
+{
+	check(Size > 0);
+	RHITHREAD_GLCOMMAND_PROLOGUE();
+
+	VERIFY_GL_SCOPE();
+	FOpenGLVertexBuffer* VertexBuffer = ResourceCast(VertexBufferRHI);
+	if( !(FOpenGL::SupportsVertexAttribBinding() && OpenGLConsoleVariables::bUseVAB) && VertexBuffer->GetUsage() & BUF_ZeroStride )
+	{
+		check( Offset + Size <= VertexBuffer->GetSize() );
+		// We assume we are only using the first elements from the VB, so we can later on read this memory and create an expanded version of this zero stride buffer
+		check(Offset == 0);
+		return (void*)( (uint8*)VertexBuffer->GetZeroStrideBuffer() + Offset );
+	}
+	else
+	{
+		if (VertexBuffer->IsDynamic() && LockMode == EResourceLockMode::RLM_WriteOnly)
+		{
+			void *Staging = GetAllocation(VertexBuffer, Size, Offset);
+			if (Staging)
+			{
+				return Staging;
+			}
+		}
+		return (void*)VertexBuffer->Lock(Offset, Size, LockMode == EResourceLockMode::RLM_ReadOnly, VertexBuffer->IsDynamic());
+	}
+	RHITHREAD_GLCOMMAND_EPILOGUE_RETURN(void*);
+}
+
+#define RHITHREAD_GLCOMMAND_EPILOGUE_RETURN(x) };\
+		if (RHICmdList.Bypass() ||  !IsRunningRHIInSeparateThread() || IsInRHIThread())\
+		{\
+			return GLCommand();\
+		}\
+		else\
+		{\
+			x ReturnValue = (x)0;\
+			ALLOC_COMMAND_CL(RHICmdList, FRHICommandGLCommand)([&ReturnValue, GLCommand = MoveTemp(GLCommand)]() { ReturnValue = GLCommand(); }); \
+			RHITHREAD_GLTRACE_BLOCKING;\
+			RHICmdList.ImmediateFlush(EImmediateFlushType::FlushRHIThread);\
+			return ReturnValue;\
+		}\
+
+case EImmediateFlushType::FlushRHIThread:
+    {
+        CSV_SCOPED_TIMING_STAT(RHITFlushes, FlushRHIThreadTotal);
+        if (HasCommands())
+        {
+            GRHICommandList.ExecuteList(*this);
+        }
+        WaitForDispatch();
+        if (IsRunningRHIInSeparateThread())
+        {
+            WaitForRHIThreadTasks();
+        }
+        WaitForTasks(true); // these are already done, but this resets the outstanding array
+    }
+
+void* FOpenGLDynamicRHI:CreateVertexBuffer()
+{
+    ALLOC_COMMAND_CL(RHICmdList, FRHICommandGLCommand)([=]() 
+    {
+        CreateGLBuffer(BuffData, ResourceToUse, ResourceSize); 
+        TransitionFence.WriteAssertFence();
+    });
+}
+
+
+FVertexBufferRHIRef FDynamicRHI::CreateVertexBuffer_RenderThread(class FRHICommandListImmediate& RHICmdList, uint32 Size, uint32 InUsage, FRHIResourceCreateInfo& CreateInfo)
+{
+	CSV_SCOPED_TIMING_STAT(RHITStalls, CreateVertexBuffer_RenderThread);
+	FScopedRHIThreadStaller StallRHIThread(RHICmdList);
+	return GDynamicRHI->RHICreateVertexBuffer(Size, InUsage, CreateInfo);
+}
+
+class RHI_API FRHICommandListImmediate : public FRHICommandList;
+
 public:
 void ImmediateFlush(EImmediateFlushType::Type FlushType);
 
@@ -227,7 +485,8 @@ struct FRHICommandDrawPrimitiveString_linenunber
     static const TCHAR* TStr() { return TEXT(FRHICommandDrawPrimitiveString); }
 }
 
-struct FRHICommandDrawPrimitive final : public FRHICommand<FRHICommandDrawPrimitive, FRHICommandDrawPrimitiveString_linenunber)>
+struct FRHICommandDrawPrimitive final : public FRHICommand < FRHICommandDrawPrimitive, FRHICommandDrawPrimitiveString_linenunber >
+
 ```
 
 那FRHICommand是什么呢？h很简单就是执行ExecuteAndDestruct，调用ThisCmd->Execute(CmdList);完成使命。然后销毁自己。
@@ -359,6 +618,75 @@ void FRHICommandListExecutor::ExecuteInner_DoExecute(FRHICommandListBase& CmdLis
     }
 
     CmdList.Reset();
+}
+
+
+RenderingThread等待 RHI线程。
+RHI线程的Task等待上一帧的执行完。
+
+void FRHICommandListBase::WaitForRHIThreadTasks()
+{
+	check(IsImmediate() && IsInRenderingThread());
+	bool bAsyncSubmit = CVarRHICmdAsyncRHIThreadDispatch.GetValueOnRenderThread() > 0;
+	ENamedThreads::Type RenderThread_Local = ENamedThreads::GetRenderThread_Local();
+	if (bAsyncSubmit)
+	{
+		if (RenderThreadSublistDispatchTask.GetReference() && RenderThreadSublistDispatchTask->IsComplete())
+		{
+			RenderThreadSublistDispatchTask = nullptr;
+		}
+		while (RenderThreadSublistDispatchTask.GetReference())
+		{
+			SCOPE_CYCLE_COUNTER(STAT_ExplicitWaitRHIThread_Dispatch);
+			if (FTaskGraphInterface::Get().IsThreadProcessingTasks(RenderThread_Local))
+			{
+				// we have to spin here because all task threads might be stalled, meaning the fire event anythread task might not be hit.
+				// todo, add a third queue
+				SCOPE_CYCLE_COUNTER(STAT_SpinWaitRHIThread);
+				while (!RenderThreadSublistDispatchTask->IsComplete())
+				{
+					FPlatformProcess::SleepNoStats(0);
+				}
+			}
+			else
+			{
+				FTaskGraphInterface::Get().WaitUntilTaskCompletes(RenderThreadSublistDispatchTask, RenderThread_Local);
+			}
+			if (RenderThreadSublistDispatchTask.GetReference() && RenderThreadSublistDispatchTask->IsComplete())
+			{
+				RenderThreadSublistDispatchTask = nullptr;
+			}
+		}
+		// now we can safely look at RHIThreadTask
+	}
+	if (RHIThreadTask.GetReference() && RHIThreadTask->IsComplete())
+	{
+		RHIThreadTask = nullptr;
+		PrevRHIThreadTask = nullptr;
+	}
+	while (RHIThreadTask.GetReference())
+	{
+		SCOPE_CYCLE_COUNTER(STAT_ExplicitWaitRHIThread);
+		if (FTaskGraphInterface::Get().IsThreadProcessingTasks(RenderThread_Local))
+		{
+			// we have to spin here because all task threads might be stalled, meaning the fire event anythread task might not be hit.
+			// todo, add a third queue
+			SCOPE_CYCLE_COUNTER(STAT_SpinWaitRHIThread);
+			while (!RHIThreadTask->IsComplete())
+			{
+				FPlatformProcess::SleepNoStats(0);
+			}
+		}
+		else
+		{
+			FTaskGraphInterface::Get().WaitUntilTaskCompletes(RHIThreadTask, RenderThread_Local);
+		}
+		if (RHIThreadTask.GetReference() && RHIThreadTask->IsComplete())
+		{
+			RHIThreadTask = nullptr;
+			PrevRHIThreadTask = nullptr;
+		}
+	}
 }
 ```
 ExchangeCmdList这块无所顾虑，因为是一个swap的是一个空的commandList。所以不需要同步。

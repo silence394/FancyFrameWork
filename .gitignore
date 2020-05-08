@@ -1,0 +1,8 @@
+.vs/
+Build/MultiThreadRender.vcxproj.filters
+Build/MultiThreadRender.vcxproj.user
+Build/Debug/MultiThreadRender.log
+Build/Debug/
+Build/Release/
+Debug/
+Release/

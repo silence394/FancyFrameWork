@@ -1,2 +1,2 @@
-# FancyFrameWork
-提交每个人的想法
+# MultiThreadRender
+线程渲染，RHI封装

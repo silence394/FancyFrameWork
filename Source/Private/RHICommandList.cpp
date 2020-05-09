@@ -87,32 +87,6 @@ void RHICommandList::ExcuteInnter()
 	mCommandLists.clear();
 }
 
-struct RHICommandCreateVertexBuffer : public RHICommandBase
-{
-	RHICommandCreateVertexBuffer(unsigned int size, EResouceUsage usage, void* data)
-		: mSize(size), mUsage(usage)
-	{
-		mData = new char[size];
-		// UE4这个地方非常巧妙，跟CommandList用的是同一块内存，commandlist提交完reset的时候一起归还内存.
-		memcpy(mData, data, size);
-	}
-
-	~RHICommandCreateVertexBuffer()
-	{
-		delete[] mData;
-	}
-
-	unsigned int mSize;
-	EResouceUsage mUsage;
-	void* mData;
-
-	void Execute()
-	{
-		// Command应该在VertexBuffer中的CreateOpenGLbuffer中执行
-		//return new VertexBuffer(size, usage, data);
-	}
-};
-
 VertexBuffer* RHICommandList::CreateVertexBuffer(unsigned int size, EResouceUsage usage, void* data)
 {
 	return new VertexBuffer(size, usage, data);

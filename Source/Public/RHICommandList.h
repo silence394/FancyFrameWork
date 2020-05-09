@@ -2,6 +2,7 @@
 
 #include <list>
 #include "../Public/OpenGLRHI.h"
+#include "RHI.h"
 
 struct RHICommandBase
 {
@@ -21,6 +22,51 @@ enum ELockMode
 };
 
 class IndexBuffer;
+class VertexBuffer;
+
+class RHICommandList
+{
+public:
+	void ExchangeCmdList(RHICommandList& cmdList);
+	void Execute();
+	void ExcuteInnter();
+
+	void RHIBeginDrawViewport();
+	void RHIEndDrawViewport(void* window);
+	void RHIBeginRenderPass() {}
+	void RHIEndRenderPass() {}
+
+	VertexBuffer* CreateVertexBuffer(unsigned int size, EResouceUsage usage, void* data);
+	void* LockVertexBuffer(VertexBuffer* vb, ELockMode lockMode);
+	void UnlockVertexBuffer(VertexBuffer* vb);
+	void SetStreamSource(VertexBuffer* vb);
+
+	IndexBuffer* CreateIndexBuffer(unsigned int stride, unsigned int size, EResouceUsage usage, void* data);
+	void* LockIndexBuffer(IndexBuffer* vb, ELockMode lockMode);
+	void UnlockIndexBuffer(IndexBuffer* ib);
+	void DrawIndexedPrimitive(IndexBuffer* ib);
+
+	// Reset() 	MemManager.Flush();
+	void AllocCommand(RHICommandBase* cmd)
+	{
+		if (cmd)
+			mCommandLists.push_back(cmd);
+	}
+
+private:
+	std::list<RHICommandBase*>	mCommandLists;
+
+	VertexBuffer* mCurVertexBuffer;
+	IndexBuffer* mCurIndexBuffer;
+};
+
+__forceinline RHICommandList& GetCommandList()
+{
+	static RHICommandList sRHICommandList;
+	return sRHICommandList;
+}
+
+
 class VertexBuffer
 {
 public:
@@ -66,14 +112,47 @@ public:
 private:
 	void CreateGLBuffer(void* data)
 	{
-		glGenBuffers(1, &mVBO);
-		Bind();
+		if (!GbUseRHI)
+		{
+			glGenBuffers(1, &mVBO);
+			Bind();
 
-		unsigned int usage = GL_STATIC_DRAW;
-		if (mUsage == ERU_Dynamic)
-			usage = GL_DYNAMIC_DRAW;
+			unsigned int usage = GL_STATIC_DRAW;
+			if (mUsage == ERU_Dynamic)
+				usage = GL_DYNAMIC_DRAW;
 
-		glBufferData(GL_ARRAY_BUFFER, mSize, data, usage);
+			glBufferData(GL_ARRAY_BUFFER, mSize, data, usage);
+		}
+		{
+			struct RHICommandCreateVertexBuffer : public RHICommandBase
+			{
+				RHICommandCreateVertexBuffer(unsigned int size, EResouceUsage usage, void* data)
+					: mSize(size), mUsage(usage)
+				{
+					mData = new char[size];
+					// UE4这个地方非常巧妙，跟CommandList用的是同一块内存，commandlist提交完reset的时候一起归还内存.
+					memcpy(mData, data, size);
+				}
+
+				~RHICommandCreateVertexBuffer()
+				{
+					delete[] mData;
+				}
+
+				unsigned int mSize;
+				EResouceUsage mUsage;
+				void* mData;
+
+				void Execute()
+				{
+					// Command应该在VertexBuffer中的CreateOpenGLbuffer中执行
+					//return new VertexBuffer(size, usage, data);
+				}
+			};
+
+			GetCommandList().AllocCommand(new RHICommandCreateVertexBuffer(mSize, mUsage, data));
+		}
+
 	}
 
 private:
@@ -83,11 +162,10 @@ private:
 	EResouceUsage mUsage;
 };
 
-
 class IndexBuffer
 {
 public:
-	IndexBuffer(unsigned int stride, unsigned int size,  EResouceUsage usage, void* data) 
+	IndexBuffer(unsigned int stride, unsigned int size, EResouceUsage usage, void* data)
 		: mStride(stride), mSize(size), mUsage(usage)
 	{
 		CreateGLBuffer(data);
@@ -153,40 +231,3 @@ private:
 	unsigned int mSize;
 	EResouceUsage mUsage;
 };
-
-class RHICommandList
-{
-public:
-	void ExchangeCmdList(RHICommandList& cmdList);
-	void Execute();
-	void ExcuteInnter();
-
-	void RHIBeginDrawViewport();
-	void RHIEndDrawViewport(void* window);
-	void RHIBeginRenderPass() {}
-	void RHIEndRenderPass() {}
-
-	VertexBuffer* CreateVertexBuffer(unsigned int size, EResouceUsage usage, void* data);
-	void* LockVertexBuffer(VertexBuffer* vb, ELockMode lockMode);
-	void UnlockVertexBuffer(VertexBuffer* vb);
-	void SetStreamSource(VertexBuffer* vb);
-
-	IndexBuffer* CreateIndexBuffer(unsigned int stride, unsigned int size, EResouceUsage usage, void* data);
-	void* LockIndexBuffer(IndexBuffer* vb, ELockMode lockMode);
-	void UnlockIndexBuffer(IndexBuffer* ib);
-	void DrawIndexedPrimitive(IndexBuffer* ib);
-
-	// Reset() 	MemManager.Flush();
-
-private:
-	std::list<RHICommandBase*>	mCommandLists;
-
-	VertexBuffer* mCurVertexBuffer;
-	IndexBuffer* mCurIndexBuffer;
-};
-
-__forceinline RHICommandList& GetCommandList()
-{
-	static RHICommandList sRHICommandList;
-	return sRHICommandList;
-}

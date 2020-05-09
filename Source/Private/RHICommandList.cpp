@@ -1,13 +1,6 @@
 #include "../Public/RHICommandList.h"
 #include "../Public/RHI.h"
-#include "../Public/OpenGLRHI.h"
 #include "../Public/CommonBase.h"
-
-RHICommandList& GetCommandList()
-{
-static RHICommandList sRHICommandList;
-return sRHICommandList;
-}
 
 void RHICommandList::ExchangeCmdList(RHICommandList& cmdList)
 {
@@ -92,4 +85,93 @@ void RHICommandList::ExcuteInnter()
 		delete* it;
 
 	mCommandLists.clear();
+}
+
+struct RHICommandCreateVertexBuffer : public RHICommandBase
+{
+	RHICommandCreateVertexBuffer(unsigned int size, EResouceUsage usage, void* data)
+		: mSize(size), mUsage(usage)
+	{
+		mData = new char[size];
+		// UE4这个地方非常巧妙，跟CommandList用的是同一块内存，commandlist提交完reset的时候一起归还内存.
+		memcpy(mData, data, size);
+	}
+
+	~RHICommandCreateVertexBuffer()
+	{
+		delete[] mData;
+	}
+
+	unsigned int mSize;
+	EResouceUsage mUsage;
+	void* mData;
+
+	void Execute()
+	{
+		// Command应该在VertexBuffer中的CreateOpenGLbuffer中执行
+		//return new VertexBuffer(size, usage, data);
+	}
+};
+
+VertexBuffer* RHICommandList::CreateVertexBuffer(unsigned int size, EResouceUsage usage, void* data)
+{
+	return new VertexBuffer(size, usage, data);
+}
+
+void* RHICommandList::LockVertexBuffer(VertexBuffer* vb, ELockMode lockMode)
+{
+	return vb->Lock(lockMode);
+}
+
+void RHICommandList::UnlockVertexBuffer(VertexBuffer* vb)
+{
+	vb->Unlock();
+}
+
+void RHICommandList::SetStreamSource(VertexBuffer* vb)
+{
+	mCurVertexBuffer = vb;
+}
+
+IndexBuffer* RHICommandList::CreateIndexBuffer(unsigned int stride, unsigned int size, EResouceUsage usage, void* data)
+{
+	IndexBuffer* ib = new IndexBuffer(stride, size, usage, data);
+
+	return ib;
+}
+
+void* RHICommandList::LockIndexBuffer(IndexBuffer* ib, ELockMode lockMode)
+{
+	return ib->Lock(lockMode);
+}
+
+void RHICommandList::UnlockIndexBuffer(IndexBuffer* ib)
+{
+	ib->Unlock();
+}
+
+void VertexBuffer::SetupVertexArray(IndexBuffer* ib)
+{
+	if (mVAO == 0)
+	{
+		glGenVertexArrays(1, &mVAO);
+		glBindVertexArray(mVAO);
+
+		Bind();
+		ib->Bind();
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+		glEnableVertexAttribArray(0);
+	}
+	else
+	{
+		glBindVertexArray(mVAO);
+	}
+}
+
+void RHICommandList::DrawIndexedPrimitive(IndexBuffer* ib)
+{
+	mCurIndexBuffer = ib;
+	mCurVertexBuffer->SetupVertexArray(mCurIndexBuffer);
+
+	glDrawElements(GL_TRIANGLES, ib->GetSize() / ib->GetStride(), ib->GetStride() == sizeof(unsigned int) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT, 0);
 }

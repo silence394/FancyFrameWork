@@ -500,48 +500,13 @@ struct FRHICommandBase
 template<typename TCmd, typename NameType = FUnnamedRhiCommand>
 struct FRHICommand : public FRHICommandBase
 {
-#if RHICOMMAND_CALLSTACK
-	uint64 StackFrames[16];
-
-	FRHICommand()
-	{
-		FPlatformStackWalk::CaptureStackBackTrace(StackFrames, 16);
-	}
-#endif
-
 	void ExecuteAndDestruct(FRHICommandListBase& CmdList, FRHICommandListDebugContext& Context) override final
 	{
-#if CPUPROFILERTRACE_ENABLED
-		static uint16 __CpuProfilerEventSpecId;
-		if (__CpuProfilerEventSpecId == 0)
-		{
-			__CpuProfilerEventSpecId = FCpuProfilerTrace::OutputEventType(NameType::TStr(), CpuProfilerGroup_Default);
-		}
-
-		extern RHI_API int32 GRHICmdTraceEvents;
-		struct FConditionalTraceScope
-		{
-			FConditionalTraceScope(const uint16 InSpecId) : SpecId(InSpecId)
-			{
-				if (SpecId) FCpuProfilerTrace::OutputBeginEvent(SpecId);
-			}
-			~FConditionalTraceScope()
-			{
-				if (SpecId) FCpuProfilerTrace::OutputEndEvent();
-			}
-			const uint16 SpecId;
-		} TraceScope(GRHICmdTraceEvents ? __CpuProfilerEventSpecId : 0);
-#endif // CPUPROFILERTRACE_ENABLED
 
 		TCmd *ThisCmd = static_cast<TCmd*>(this);
-#if RHI_COMMAND_LIST_DEBUG_TRACES
-		ThisCmd->StoreDebugInfo(Context);
-#endif
 		ThisCmd->Execute(CmdList);
 		ThisCmd->~TCmd();
 	}
-
-	virtual void StoreDebugInfo(FRHICommandListDebugContext& Context) {};
 };
 ```
 很好理解把命令做个封装，然后把数据填到Command里。

@@ -19,14 +19,14 @@
     <None Include="..\Shaders\sprite.vs" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\Source\MultiThreadRender.cpp">
-      <Filter>Source\Private</Filter>
-    </ClCompile>
     <ClCompile Include="..\Source\Private\RHICommandList.cpp">
       <Filter>Source\Private</Filter>
     </ClCompile>
     <ClCompile Include="..\Source\Private\RHI.cpp">
       <Filter>Source\Private</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\MultiThreadRender.cpp">
+      <Filter>Source</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

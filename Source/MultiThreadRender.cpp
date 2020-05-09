@@ -110,13 +110,16 @@ void InitDevice()
 
 void GameThread()
 {
-	// Wait RHIThread init.
 	if (GbUseRHI)
 	{
 		mRHIInitSemaphere.wait();
 	}
 	else
 	{
+		InitWindow();
+		if (GWindow == nullptr)
+			glfwTerminate();
+
 		InitDevice();
 	}
 
@@ -129,14 +132,14 @@ void GameThread()
 		GetCommandList().RHIBeginDrawViewport();
 		GetCommandList().RHIEndDrawViewport(GWindow);
 
-		// ExcuteCommandlist.
-		RHICommandList* swapCmdLists = new RHICommandList();
-		GetCommandList().ExchangeCmdList(*swapCmdLists);
-
-		GRHITasks.Push(new RHIExecuteCommandList(swapCmdLists));
-
 		if (GbUseRHI)
+		{
+			// ExcuteCommandlist.
+			RHICommandList* swapCmdLists = new RHICommandList();
+			GetCommandList().ExchangeCmdList(*swapCmdLists);
+			GRHITasks.Push(new RHIExecuteCommandList(swapCmdLists));
 			mRHISemaphere.notify();
+		}
 	}
 }
 
@@ -167,9 +170,11 @@ void RHIThread()
 int main()
 {
 	std::thread gameThread = std::thread(GameThread);
-	std::thread rhiThread = std::thread(RHIThread);
-	if ( GbUseRHI )
+	if (GbUseRHI)
+	{
+		std::thread rhiThread = std::thread(RHIThread);
 		rhiThread.join();
+	}
 
 	gameThread.join();
 

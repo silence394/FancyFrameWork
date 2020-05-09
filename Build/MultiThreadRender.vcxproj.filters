@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source">
+      <UniqueIdentifier>{a6dcfe22-f6b9-4d8d-a5d9-46bb447b5b77}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{3c419895-d974-471d-a8af-23c543a50d02}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Private">
+      <UniqueIdentifier>{065d3f05-47fa-4dca-8b8c-fa89b9a92df6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Source">
+      <UniqueIdentifier>{9d4f93fd-f792-4670-82d3-b7224029359f}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Shaders\sprite.ps" />
+    <None Include="..\Shaders\sprite.vs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Source\MultiThreadRender.cpp">
+      <Filter>Source\Private</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Private\RHICommandList.cpp">
+      <Filter>Source\Private</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Private\RHI.cpp">
+      <Filter>Source\Private</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Source\Public\OpenGLProgram.h">
+      <Filter>Source\Source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Public\Semaphore.h">
+      <Filter>Source\Source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Public\RHICommandList.h">
+      <Filter>Source\Source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Public\OpenGLRHI.h">
+      <Filter>Source\Source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Public\RHI.h">
+      <Filter>Source\Source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Public\CommonBase.h">
+      <Filter>Source\Source</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

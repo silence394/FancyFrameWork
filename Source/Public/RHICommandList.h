@@ -3,6 +3,10 @@
 #include <list>
 #include "../Public/OpenGLRHI.h"
 #include "RHI.h"
+#include <functional>
+#include "Semaphore.h"
+#include <assert.h>
+#include <iostream>
 
 struct RHICommandBase
 {
@@ -19,6 +23,65 @@ enum ELockMode
 {
 	ELM_READ = 1,
 	ELM_WRITE = 2,
+};
+
+template<typename T>
+class LockFreeQueue
+{
+public:
+	LockFreeQueue()
+		: mIn(0), mOut(0) {}
+
+	void Push(T value)
+	{
+		int next = (mIn + 1) % MAX_SIZE;
+		while (next == mOut)
+		{
+			mWriteSem.wait();
+		}
+
+		mContent[mIn] = value;
+		mIn = next;
+
+		mReadSem.notify();
+	}
+
+	T Pop()
+	{
+		while (mOut == mIn)
+		{
+			mReadSem.wait();
+		}
+
+		int temp = mOut;
+
+		mOut = (mOut + 1) % MAX_SIZE;
+		mWriteSem.notify();
+
+		return mContent[temp];;
+	}
+
+private:
+	const static int MAX_SIZE = 1024;
+	T mContent[MAX_SIZE];
+
+	int mIn;
+	int mOut;
+	Semaphore mReadSem;
+	Semaphore mWriteSem;
+};
+
+#define CHECK_GL_ERROR() \
+{\
+				int error = glGetError(); \
+if (error) \
+std::cout << error << "in line " << __LINE__ << std::endl; \
+}
+
+class TaskBase
+{
+public:
+	virtual void DoTask() = 0;
 };
 
 class IndexBuffer;
@@ -53,6 +116,8 @@ public:
 			mCommandLists.push_back(cmd);
 	}
 
+	void Flush();
+
 private:
 	std::list<RHICommandBase*>	mCommandLists;
 
@@ -66,10 +131,81 @@ __forceinline RHICommandList& GetCommandList()
 	return sRHICommandList;
 }
 
+class RHIExecuteCommandListTask : public TaskBase
+{
+public:
+	RHIExecuteCommandListTask(RHICommandList* list)
+		: mCmdList(list) {
+		assert(mCmdList != nullptr);
+	}
+
+	virtual void DoTask()
+	{
+		mCmdList->ExcuteInnter();
+
+		delete mCmdList;
+		mCmdList = nullptr;
+	}
+
+private:
+	RHICommandList* mCmdList;
+};
+
+extern LockFreeQueue<TaskBase*> GRHITasks;
+
+__forceinline void AddTask(TaskBase* task)
+{
+	GRHITasks.Push(task);
+}
+
+struct RHIOpenGLCommand : public RHICommandBase
+{
+	RHIOpenGLCommand(std::function<void()> func)
+		: mFunc(func) {}
+
+	void Execute()
+	{
+		mFunc();
+	}
+
+	std::function<void()> mFunc;
+};
 
 class VertexBuffer
 {
 public:
+	//friend class RHICommandCreateVertexBuffer;
+	//struct RHICommandCreateVertexBuffer : public RHICommandBase
+	//{
+	//	RHICommandCreateVertexBuffer(void* data, VertexBuffer* vb)
+	//		: mBuffer(vb)
+	//	{
+	//		mData = new char[mBuffer->mSize];
+	//		// UE4这个地方非常巧妙，跟CommandList用的是同一块内存，commandlist提交完reset的时候一起归还内存.
+	//		memcpy(mData, data, mBuffer->mSize);
+	//	}
+
+	//	~RHICommandCreateVertexBuffer()
+	//	{
+	//		delete[] mData;
+	//	}
+
+	//	void Execute()
+	//	{
+	//		glGenBuffers(1, &mBuffer->mVBO);
+	//		mBuffer->Bind();
+
+	//		unsigned int usage = GL_STATIC_DRAW;
+	//		if (mBuffer->mUsage == ERU_Dynamic)
+	//			usage = GL_DYNAMIC_DRAW;
+
+	//		glBufferData(GL_ARRAY_BUFFER, mBuffer->mSize, mData, mBuffer->mUsage);
+	//	}
+
+	//	void* mData;
+	//	VertexBuffer* mBuffer;
+	//};
+
 	VertexBuffer(unsigned int size, EResouceUsage usage, void* data)
 		: mSize(size), mVAO(0), mUsage(usage)
 	{
@@ -83,23 +219,77 @@ public:
 
 	void* Lock(ELockMode lockMode)
 	{
-		Bind();
+		void* buffer = nullptr;
 
-		unsigned int mode = GL_READ_WRITE;
-		if (lockMode == ELM_READ)
-			mode = GL_READ_ONLY;
-		else if (lockMode == ELM_WRITE)
-			mode = GL_WRITE_ONLY;
+		if (!GbUseRHI)
+		{
+			Bind();
 
-		void* buffer = glMapBuffer(GL_ARRAY_BUFFER, mode);
+			unsigned int mode = GL_READ_WRITE;
+			if (lockMode == ELM_READ)
+				mode = GL_READ_ONLY;
+			else if (lockMode == ELM_WRITE)
+				mode = GL_WRITE_ONLY;
+
+			buffer = glMapBuffer(GL_ARRAY_BUFFER, mode);
+		}
+		else
+		{
+			// readonly.
+			auto cmd = [&]()
+			{
+				Bind();
+
+				unsigned int mode = GL_READ_WRITE;
+				if (lockMode == ELM_READ)
+					mode = GL_READ_ONLY;
+				else if (lockMode == ELM_WRITE)
+					mode = GL_WRITE_ONLY;
+
+				buffer = glMapBuffer(GL_ARRAY_BUFFER, mode);
+			};
+
+			GetCommandList().AllocCommand(new RHIOpenGLCommand(cmd));
+
+			auto waitCmd = [=]()
+			{
+				mSem.notify();
+			};
+
+			GetCommandList().AllocCommand(new RHIOpenGLCommand(waitCmd));
+
+			// 分发给RHI线程执行。
+			RHICommandList* swapCmdLists = new RHICommandList();
+			GetCommandList().ExchangeCmdList(*swapCmdLists);
+			// Add Task.
+
+			AddTask(new RHIExecuteCommandListTask(swapCmdLists));
+
+			// Wait flush.
+			mSem.wait();
+		}
+
 
 		return buffer;
 	}
 
 	void Unlock()
 	{
-		Bind();
-		glUnmapBuffer(GL_ARRAY_BUFFER);
+		if (!GbUseRHI)
+		{
+			Bind();
+			glUnmapBuffer(GL_ARRAY_BUFFER);
+		}
+		else
+		{
+			auto cmd = [=]()
+			{
+				Bind();
+				glUnmapBuffer(GL_ARRAY_BUFFER);
+			};
+
+			GetCommandList().AllocCommand(new RHIOpenGLCommand(cmd));
+		}
 	}
 
 	void Bind()
@@ -123,36 +313,26 @@ private:
 
 			glBufferData(GL_ARRAY_BUFFER, mSize, data, usage);
 		}
+		else
 		{
-			struct RHICommandCreateVertexBuffer : public RHICommandBase
+			char* buffer = new char[mSize];
+			memcpy(buffer, data, mSize);
+			auto cmd = [=]()
 			{
-				RHICommandCreateVertexBuffer(unsigned int size, EResouceUsage usage, void* data)
-					: mSize(size), mUsage(usage)
-				{
-					mData = new char[size];
-					// UE4这个地方非常巧妙，跟CommandList用的是同一块内存，commandlist提交完reset的时候一起归还内存.
-					memcpy(mData, data, size);
-				}
+				glGenBuffers(1, &mVBO);
+				Bind();
 
-				~RHICommandCreateVertexBuffer()
-				{
-					delete[] mData;
-				}
+				unsigned int usage = GL_STATIC_DRAW;
+				if (mUsage == ERU_Dynamic)
+					usage = GL_DYNAMIC_DRAW;
 
-				unsigned int mSize;
-				EResouceUsage mUsage;
-				void* mData;
-
-				void Execute()
-				{
-					// Command应该在VertexBuffer中的CreateOpenGLbuffer中执行
-					//return new VertexBuffer(size, usage, data);
-				}
+				glBufferData(GL_ARRAY_BUFFER, mSize, buffer, usage);
+				CHECK_GL_ERROR()
+				//delete buffer;
 			};
 
-			GetCommandList().AllocCommand(new RHICommandCreateVertexBuffer(mSize, mUsage, data));
+			GetCommandList().AllocCommand(new RHIOpenGLCommand(cmd));
 		}
-
 	}
 
 private:
@@ -160,6 +340,8 @@ private:
 	unsigned int mVBO;
 	unsigned int mVAO;
 	EResouceUsage mUsage;
+
+	Semaphore mSem;
 };
 
 class IndexBuffer
@@ -215,14 +397,37 @@ public:
 private:
 	void CreateGLBuffer(void* data)
 	{
-		glGenBuffers(1, &mEBO);
-		Bind();
+		if (!GbUseRHI)
+		{
+			glGenBuffers(1, &mEBO);
+			Bind();
 
-		unsigned int usage = GL_STATIC_DRAW;
-		if (mUsage == ERU_Dynamic)
-			usage = GL_DYNAMIC_DRAW;
+			unsigned int usage = GL_STATIC_DRAW;
+			if (mUsage == ERU_Dynamic)
+				usage = GL_DYNAMIC_DRAW;
 
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, mSize, data, usage);
+			glBufferData(GL_ELEMENT_ARRAY_BUFFER, mSize, data, usage);
+		}
+		else
+		{
+			char* buffer = new char[mSize];
+			memcpy(buffer, data, mSize);
+			auto cmd = [=]()
+			{
+				glGenBuffers(1, &mEBO);
+				Bind();
+
+				unsigned int usage = GL_STATIC_DRAW;
+				if (mUsage == ERU_Dynamic)
+					usage = GL_DYNAMIC_DRAW;
+
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER, mSize, buffer, usage);
+				CHECK_GL_ERROR()
+				//delete buffer;
+			};
+
+			GetCommandList().AllocCommand(new RHIOpenGLCommand(cmd));
+		}
 	}
 
 private:

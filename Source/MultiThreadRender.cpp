@@ -9,84 +9,13 @@
 #include "Public/RHI.h"
 #include <assert.h>
 #include <queue>
+#include <functional>
 
 GLFWwindow* GWindow = nullptr;
 
 Semaphore mGameSemaphere(2);
 Semaphore mRHISemaphere;
 Semaphore mRHIInitSemaphere;
-
-template<typename T>
-class LockFreeQueue
-{
-public:
-	LockFreeQueue()
-		: mIn(0), mOut(0) {}
-
-	void Push(T value)
-	{
-		int next = (mIn + 1) % MAX_SIZE;
-		while (next == mOut)
-		{
-			mWriteSem.wait();
-		}
-
-		mContent[mIn] = value;
-		mIn = next;
-
-		mReadSem.notify();
-	}
-
-	T Pop()
-	{
-		while (mOut == mIn)
-		{
-			mReadSem.wait();
-		}
-
-		int temp = mOut;
-
-		mOut = (mOut + 1) % MAX_SIZE;
-		mWriteSem.notify();
-
-		return mContent[temp];;
-	}
-
-private:
-	const static int MAX_SIZE = 1024;
-	T mContent[MAX_SIZE];
-
-	int mIn;
-	int mOut;
-	Semaphore mReadSem;
-	Semaphore mWriteSem;
-};
-
-class TaskBase
-{
-public:
-	virtual void DoTask() = 0;
-};
-
-class RHIExecuteCommandListTask : public TaskBase
-{
-public:
-	RHIExecuteCommandListTask(RHICommandList* list)
-		: mCmdList(list) { assert(mCmdList != nullptr); }
-
-	virtual void DoTask()
-	{
-		mCmdList->ExcuteInnter();
-
-		delete mCmdList;
-		mCmdList = nullptr;
-	}
-
-private:
-	RHICommandList* mCmdList;
-};
-
-LockFreeQueue<TaskBase*> GRHITasks;
 
 void InitWindow()
 {
@@ -168,7 +97,7 @@ void GameThread()
 			else if (offset < -0.5f)
 				added = true;
 
-			float* vbuffer = (float*) GetCommandList().LockVertexBuffer(gVertexBuffer, ELM_WRITE);
+			float* vbuffer = (float*)GetCommandList().LockVertexBuffer(gVertexBuffer, ELM_WRITE);
 
 			for (int i = 0; i < 12; i++)
 				*vbuffer++ += added ? 0.05f : -0.05f;
@@ -188,7 +117,7 @@ void GameThread()
 			// ExcuteCommandlist.
 			RHICommandList* swapCmdLists = new RHICommandList();
 			GetCommandList().ExchangeCmdList(*swapCmdLists);
-			GRHITasks.Push(new RHIExecuteCommandListTask(swapCmdLists));
+			AddTask(new RHIExecuteCommandListTask(swapCmdLists));
 			mRHISemaphere.notify();
 		}
 	}
@@ -217,6 +146,33 @@ void RHIThread()
 
 	glfwTerminate();
 }
+
+//class OpengLCmd
+//{
+//public:
+//	OpengLCmd(std::function<void()> fun)
+//		: mFunc(fun) {}
+//
+//	void Execute()
+//	{
+//		mFunc();
+//	}
+//private:
+//	std::function<void()> mFunc;
+//};
+//
+//int a = 1;
+//int b = 2;
+//auto f = [=]()
+//{
+//	int c = a + b;
+//	std::cout << "asdfasdf : " << c << "!!" << std::endl;
+//};
+//
+//OpengLCmd cmd(f);
+//
+//cmd.Execute();
+
 
 int main()
 {

@@ -2,6 +2,8 @@
 #include "../Public/RHI.h"
 #include "../Public/CommonBase.h"
 
+LockFreeQueue<TaskBase*> GRHITasks;
+
 void RHICommandList::ExchangeCmdList(RHICommandList& cmdList)
 {
 	std::swap(*this, cmdList);
@@ -58,7 +60,9 @@ struct RHICommandEndDrawViewport : public RHICommandBase
 	virtual void Execute()
 	{
 		glfwSwapBuffers(mWindow);
+		CHECK_GL_ERROR()
 		glfwPollEvents();
+		CHECK_GL_ERROR()
 	}
 };
 
@@ -104,7 +108,14 @@ void RHICommandList::UnlockVertexBuffer(VertexBuffer* vb)
 
 void RHICommandList::SetStreamSource(VertexBuffer* vb)
 {
-	mCurVertexBuffer = vb;
+	auto Cmd = [=]()
+	{
+		mCurVertexBuffer = vb;
+	};
+	if (!GbUseRHI)
+		Cmd();
+	else
+		GetCommandList().AllocCommand(new RHIOpenGLCommand(Cmd));
 }
 
 IndexBuffer* RHICommandList::CreateIndexBuffer(unsigned int stride, unsigned int size, EResouceUsage usage, void* data)
@@ -144,8 +155,22 @@ void VertexBuffer::SetupVertexArray(IndexBuffer* ib)
 
 void RHICommandList::DrawIndexedPrimitive(IndexBuffer* ib)
 {
-	mCurIndexBuffer = ib;
-	mCurVertexBuffer->SetupVertexArray(mCurIndexBuffer);
+	auto Cmd = [=]()
+	{
+		mCurIndexBuffer = ib;
+		mCurVertexBuffer->SetupVertexArray(mCurIndexBuffer);
+		CHECK_GL_ERROR()
+		glDrawElements(GL_TRIANGLES, ib->GetSize() / ib->GetStride(), ib->GetStride() == sizeof(unsigned int) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT, 0);
+		CHECK_GL_ERROR()
+	};
 
-	glDrawElements(GL_TRIANGLES, ib->GetSize() / ib->GetStride(), ib->GetStride() == sizeof(unsigned int) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT, 0);
+	if (!GbUseRHI)
+		Cmd();
+	else
+		GetCommandList().AllocCommand(new RHIOpenGLCommand(Cmd));
+}
+
+void RHICommandList::Flush()
+{
+
 }

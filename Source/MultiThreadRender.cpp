@@ -79,8 +79,9 @@ void GameThread()
 
 	while (!glfwWindowShouldClose(GWindow))
 	{
-		if (GbUseRHI)
-			mGameSemaphere.wait();
+
+		static int count = 1;
+		//std::cout << "game thread count !!!!!!!!!!!!!!!!!" << count++ << std::endl;
 
 		frameCount++;
 		if (frameCount > 10)
@@ -109,16 +110,15 @@ void GameThread()
 		GetCommandList().RHIBeginDrawViewport();
 		GetCommandList().SetStreamSource(gVertexBuffer);
 		GetCommandList().DrawIndexedPrimitive(gIndexBuffer);
-
 		GetCommandList().RHIEndDrawViewport(GWindow);
 
 		if (GbUseRHI)
 		{
 			// ExcuteCommandlist.
 			RHICommandList* swapCmdLists = new RHICommandList();
+			LOG_OUTPUT()
 			GetCommandList().ExchangeCmdList(*swapCmdLists);
 			AddTask(new RHIExecuteCommandListTask(swapCmdLists));
-			mRHISemaphere.notify();
 		}
 	}
 }
@@ -134,45 +134,17 @@ void RHIThread()
 
 	while (!glfwWindowShouldClose(GWindow))
 	{
-		mRHISemaphere.wait();
+		static int count = 1;
+		//std::cout << "rhi count ~~~~~~~~~$$$$$$$$$$$$$$$$$$$" << count++ << std::endl;
 
 		// Really ExecuteCommands.
 		TaskBase* task = GRHITasks.Pop();
 		task->DoTask();
 		delete task;
-
-		mGameSemaphere.notify();
 	}
 
 	glfwTerminate();
 }
-
-//class OpengLCmd
-//{
-//public:
-//	OpengLCmd(std::function<void()> fun)
-//		: mFunc(fun) {}
-//
-//	void Execute()
-//	{
-//		mFunc();
-//	}
-//private:
-//	std::function<void()> mFunc;
-//};
-//
-//int a = 1;
-//int b = 2;
-//auto f = [=]()
-//{
-//	int c = a + b;
-//	std::cout << "asdfasdf : " << c << "!!" << std::endl;
-//};
-//
-//OpengLCmd cmd(f);
-//
-//cmd.Execute();
-
 
 int main()
 {

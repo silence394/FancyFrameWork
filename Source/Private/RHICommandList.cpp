@@ -3,10 +3,14 @@
 #include "../Public/CommonBase.h"
 
 LockFreeQueue<TaskBase*> GRHITasks;
+int GRHIFenceIndex = 0;
+DynamicRHIState GDynamicRHIState;
 
 void RHICommandList::ExchangeCmdList(RHICommandList& cmdList)
 {
 	std::swap(*this, cmdList);
+
+	LOG_OUTPUT()
 }
 
 void RHICommandList::Execute()
@@ -31,6 +35,7 @@ struct RHICommandBeginDrawViewport : public RHICommandBase
 
 	virtual void Execute()
 	{
+		LOG_OUTPUT()
 		glClearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
 
 		glClear(GL_COLOR_BUFFER_BIT);
@@ -59,6 +64,7 @@ struct RHICommandEndDrawViewport : public RHICommandBase
 
 	virtual void Execute()
 	{
+		LOG_OUTPUT()
 		glfwSwapBuffers(mWindow);
 		CHECK_GL_ERROR()
 		glfwPollEvents();
@@ -77,6 +83,17 @@ void RHICommandList::RHIEndDrawViewport(void* window)
 	else
 	{
 		mCommandLists.push_back(new RHICommandEndDrawViewport(win));
+		mCommandLists.push_back(new RHICommandFence(GRHIFenceIndex));
+	}
+
+	if (GbUseRHI)
+	{
+		int preIndex = 1 - GRHIFenceIndex;
+		HANDLE fence = GetRHICommandFence(preIndex);
+		LOG_OUTPUT()
+		WaitForSingleObject(fence, INFINITE);
+		LOG_OUTPUT()
+		GRHIFenceIndex = preIndex;
 	}
 }
 
@@ -106,11 +123,26 @@ void RHICommandList::UnlockVertexBuffer(VertexBuffer* vb)
 	vb->Unlock();
 }
 
+//struct RHICommandSetStreamSource : public RHICommandBase
+//{
+//	RHICommandSetStreamSource(VertexBuffer* vb)
+//		: mVertexBuffer(vb) { }
+//
+//	void Execute()
+//	{
+//		GDynamicRHIState.mVertexBuffer = mVertexBuffer;
+//	}
+//
+//	VertexBuffer* mVertexBuffer;
+//};
+
 void RHICommandList::SetStreamSource(VertexBuffer* vb)
 {
+	// 它用的都是发起命令时候的环境中变量。
 	auto Cmd = [=]()
 	{
-		mCurVertexBuffer = vb;
+		LOG_OUTPUT()
+		GDynamicRHIState.mVertexBuffer = vb;
 	};
 	if (!GbUseRHI)
 		Cmd();
@@ -157,8 +189,9 @@ void RHICommandList::DrawIndexedPrimitive(IndexBuffer* ib)
 {
 	auto Cmd = [=]()
 	{
-		mCurIndexBuffer = ib;
-		mCurVertexBuffer->SetupVertexArray(mCurIndexBuffer);
+		GDynamicRHIState.mIndexBuffer = ib;
+		LOG_OUTPUT()
+		GDynamicRHIState.mVertexBuffer->SetupVertexArray(GDynamicRHIState.mIndexBuffer);
 		CHECK_GL_ERROR()
 		glDrawElements(GL_TRIANGLES, ib->GetSize() / ib->GetStride(), ib->GetStride() == sizeof(unsigned int) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT, 0);
 		CHECK_GL_ERROR()

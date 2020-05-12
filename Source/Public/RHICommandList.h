@@ -8,6 +8,15 @@
 #include <assert.h>
 #include <iostream>
 
+//#define ENABLE_LOG
+
+#ifdef ENABLE_LOG
+#define LOG_OUTPUT() \
+std::cout << "FUNCTION :" << __FUNCTION__ << " line " << __LINE__ << " CUR THREAD : " << GetCurrentThreadId() << std::endl;
+#else
+#define LOG_OUTPUT()
+#endif
+
 struct RHICommandBase
 {
 	virtual void Execute() = 0;
@@ -87,6 +96,14 @@ public:
 class IndexBuffer;
 class VertexBuffer;
 
+struct DynamicRHIState
+{
+	VertexBuffer* mVertexBuffer;
+	IndexBuffer* mIndexBuffer;
+};
+
+extern DynamicRHIState GDynamicRHIState;
+
 class RHICommandList
 {
 public:
@@ -120,9 +137,6 @@ public:
 
 private:
 	std::list<RHICommandBase*>	mCommandLists;
-
-	VertexBuffer* mCurVertexBuffer;
-	IndexBuffer* mCurIndexBuffer;
 };
 
 __forceinline RHICommandList& GetCommandList()
@@ -130,6 +144,59 @@ __forceinline RHICommandList& GetCommandList()
 	static RHICommandList sRHICommandList;
 	return sRHICommandList;
 }
+
+
+// TODO.
+
+__forceinline HANDLE GetRHIEvent()
+{
+	static HANDLE sRHIEvent = nullptr;
+	if (sRHIEvent == nullptr)
+	{
+		sRHIEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+	}
+
+	return sRHIEvent;
+}
+
+__forceinline HANDLE GetRHICommandFence(int index)
+{
+	static HANDLE sFence0 = nullptr;
+	if (sFence0 == nullptr)
+	{
+		sFence0 = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+		SetEvent(sFence0);
+	}
+
+	static HANDLE sFence1 = nullptr;
+	if (sFence1 == nullptr)
+	{
+		sFence1 = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+		SetEvent(sFence1);
+	}
+
+	if (index != 0 && index != 1)
+		return nullptr;
+
+	return index == 0 ? sFence0 : sFence1;
+}
+
+struct RHICommandFence : public RHICommandBase
+{
+	int mFenceIndex;
+	RHICommandFence(int index)
+		: mFenceIndex(index)
+	{
+	}
+
+	void Execute()
+	{
+		LOG_OUTPUT()
+		SetEvent(GetRHICommandFence(mFenceIndex));
+	}
+};
+
+extern int GRHIFenceIndex;
 
 class RHIExecuteCommandListTask : public TaskBase
 {
@@ -247,28 +314,33 @@ public:
 					mode = GL_WRITE_ONLY;
 
 				buffer = glMapBuffer(GL_ARRAY_BUFFER, mode);
+				LOG_OUTPUT()
 			};
 
 			GetCommandList().AllocCommand(new RHIOpenGLCommand(cmd));
 
+			// 执行完任务之后，SetEvent.
 			auto waitCmd = [=]()
 			{
-				mSem.notify();
+				LOG_OUTPUT()
+				SetEvent(GetRHIEvent());
 			};
 
 			GetCommandList().AllocCommand(new RHIOpenGLCommand(waitCmd));
 
 			// 分发给RHI线程执行。
 			RHICommandList* swapCmdLists = new RHICommandList();
+			LOG_OUTPUT()
 			GetCommandList().ExchangeCmdList(*swapCmdLists);
 			// Add Task.
 
 			AddTask(new RHIExecuteCommandListTask(swapCmdLists));
-
-			// Wait flush.
-			mSem.wait();
+			LOG_OUTPUT()
+			// 等待任务执行完毕。
+			WaitForSingleObject(GetRHIEvent(), INFINITE);
+			int a = 1;
+			int b = a + 1;
 		}
-
 
 		return buffer;
 	}
@@ -340,8 +412,6 @@ private:
 	unsigned int mVBO;
 	unsigned int mVAO;
 	EResouceUsage mUsage;
-
-	Semaphore mSem;
 };
 
 class IndexBuffer

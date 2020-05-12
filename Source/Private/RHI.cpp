@@ -1,1 +1,1 @@
-bool GbUseRHI = false;
+bool GbUseRHI = true;

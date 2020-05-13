@@ -13,8 +13,6 @@
 
 GLFWwindow* GWindow = nullptr;
 
-Semaphore mGameSemaphere(2);
-Semaphore mRHISemaphere;
 Semaphore mRHIInitSemaphere;
 
 void InitWindow()
@@ -28,9 +26,9 @@ void InitWindow()
 
 VertexBuffer* gVertexBuffer;
 IndexBuffer* gIndexBuffer;
-
-
-unsigned int VBO, VAO, EBO;
+float* gVertices = nullptr;
+unsigned* gIndices = nullptr;
+ELockMode gVertexLockMode = ELM_WRITE;
 
 void InitDevice()
 {
@@ -48,13 +46,20 @@ void InitDevice()
 	-0.5f, -0.5f, 0.0f,  // bottom left
 	-0.5f,  0.5f, 0.0f   // top left 
 	};
+
+	gVertices = new float[sizeof(vertices) / sizeof(float)];
+	memcpy(gVertices, vertices, sizeof(vertices));
+
 	unsigned int indices[] = {  // note that we start from 0!
 		0, 1, 3,  // first Triangle
 		1, 2, 3   // second Triangle
 	};
 
-	gVertexBuffer = GetCommandList().CreateVertexBuffer(sizeof(vertices), ERU_Dynamic, vertices);
-	gIndexBuffer = GetCommandList().CreateIndexBuffer(sizeof(unsigned int), sizeof(indices), ERU_Static, indices);
+	gIndices = new unsigned int[sizeof(indices) / sizeof(unsigned int)];
+	memcpy(gIndices, indices, sizeof(indices));
+
+	gVertexBuffer = GetCommandList().CreateVertexBuffer(sizeof(vertices), ERU_Dynamic, gVertices);
+	gIndexBuffer = GetCommandList().CreateIndexBuffer(sizeof(unsigned int), sizeof(indices), ERU_Static, gIndices);
 }
 
 void GameThread()
@@ -79,8 +84,7 @@ void GameThread()
 
 	while (!glfwWindowShouldClose(GWindow))
 	{
-
-		static int count = 1;
+		//static int count = 1;
 		//std::cout << "game thread count !!!!!!!!!!!!!!!!!" << count++ << std::endl;
 
 		frameCount++;
@@ -98,10 +102,21 @@ void GameThread()
 			else if (offset < -0.5f)
 				added = true;
 
-			float* vbuffer = (float*)GetCommandList().LockVertexBuffer(gVertexBuffer, ELM_WRITE);
+			float* vbuffer = (float*)GetCommandList().LockVertexBuffer(gVertexBuffer, gVertexLockMode);
 
-			for (int i = 0; i < 12; i++)
-				*vbuffer++ += added ? 0.05f : -0.05f;
+			if (gVertexLockMode != ELM_WRITE)
+			{
+				for (int i = 0; i < 12; i++)
+					*vbuffer++ += added ? 0.05f : -0.05f;
+			}
+			else
+			{
+				float* buffer = gVertices;
+				for (int i = 0; i < 12; i++)
+					*buffer++ += added ? 0.05f : -0.05f;
+
+				memcpy(vbuffer, gVertices, 48);
+			}
 
 			GetCommandList().UnlockVertexBuffer(gVertexBuffer);
 		}
@@ -146,6 +161,16 @@ void RHIThread()
 	glfwTerminate();
 }
 
+void OnClose()
+{
+	delete[] gVertices;
+	delete[] gIndices;
+	// InRHI
+	// delete gVertexBuffer;
+	// InRHI.
+	//delete gIndexBuffer;
+}
+
 int main()
 {
 	std::thread gameThread = std::thread(GameThread);
@@ -156,6 +181,8 @@ int main()
 	}
 
 	gameThread.join();
+
+	OnClose();
 
 	return 0;
 }

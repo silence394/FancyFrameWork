@@ -115,6 +115,20 @@ VertexBuffer* RHICommandList::CreateVertexBuffer(unsigned int size, EResouceUsag
 
 void* RHICommandList::LockVertexBuffer(VertexBuffer* vb, ELockMode lockMode)
 {
+	// Dynamic的buffer Map会不会影响速度，
+	//if (FOpenGL::SupportsBufferStorage() && OpenGLConsoleVariables::bUseStagingBuffer)
+	//{
+	//	if (PoolVB == 0)
+	//	{
+	//		FOpenGL::GenBuffers(1, &PoolVB);
+	//		glBindBuffer(GL_COPY_READ_BUFFER, PoolVB);
+	//		FOpenGL::BufferStorage(GL_COPY_READ_BUFFER, PerFrameMax * 4, NULL, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
+	//		PoolPointer = (uint8*)FOpenGL::MapBufferRange(GL_COPY_READ_BUFFER, 0, PerFrameMax * 4, FOpenGL::EResourceLockMode::RLM_WriteOnlyPersistent);
+
+	//		FreeSpace = PerFrameMax * 4;
+	//	}
+	//}
+	// 如果是READONLY，肯定要调用Map.
 	return vb->Lock(lockMode);
 }
 
@@ -123,22 +137,9 @@ void RHICommandList::UnlockVertexBuffer(VertexBuffer* vb)
 	vb->Unlock();
 }
 
-//struct RHICommandSetStreamSource : public RHICommandBase
-//{
-//	RHICommandSetStreamSource(VertexBuffer* vb)
-//		: mVertexBuffer(vb) { }
-//
-//	void Execute()
-//	{
-//		GDynamicRHIState.mVertexBuffer = mVertexBuffer;
-//	}
-//
-//	VertexBuffer* mVertexBuffer;
-//};
-
 void RHICommandList::SetStreamSource(VertexBuffer* vb)
 {
-	// 它用的都是发起命令时候的环境中变量。
+	// 它用的都是发起命令时候的环境中变量, a exchageComandList(b)里交换了cmdlist，但是RHI执行lamda的时候用的还是 a环境里的东西。
 	auto Cmd = [=]()
 	{
 		LOG_OUTPUT()
@@ -201,9 +202,4 @@ void RHICommandList::DrawIndexedPrimitive(IndexBuffer* ib)
 		Cmd();
 	else
 		GetCommandList().AllocCommand(new RHIOpenGLCommand(Cmd));
-}
-
-void RHICommandList::Flush()
-{
-
 }

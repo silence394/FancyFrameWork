@@ -1,4 +1,4 @@
-#pragma once
+Ôªø#pragma once
 
 #include <list>
 #include "../Public/OpenGLRHI.h"
@@ -32,6 +32,7 @@ enum ELockMode
 {
 	ELM_READ = 1,
 	ELM_WRITE = 2,
+	ELM_READ_WRITE = 3,
 };
 
 template<typename T>
@@ -82,9 +83,9 @@ private:
 
 #define CHECK_GL_ERROR() \
 {\
-				int error = glGetError(); \
-if (error) \
-std::cout << error << "in line " << __LINE__ << std::endl; \
+	int error = glGetError(); \
+	if (error!=0) \
+		std::cout << error << "in line " << __LINE__ << std::endl; \
 }
 
 class TaskBase
@@ -126,14 +127,11 @@ public:
 	void UnlockIndexBuffer(IndexBuffer* ib);
 	void DrawIndexedPrimitive(IndexBuffer* ib);
 
-	// Reset() 	MemManager.Flush();
 	void AllocCommand(RHICommandBase* cmd)
 	{
 		if (cmd)
 			mCommandLists.push_back(cmd);
 	}
-
-	void Flush();
 
 private:
 	std::list<RHICommandBase*>	mCommandLists;
@@ -145,9 +143,7 @@ __forceinline RHICommandList& GetCommandList()
 	return sRHICommandList;
 }
 
-
 // TODO.
-
 __forceinline HANDLE GetRHIEvent()
 {
 	static HANDLE sRHIEvent = nullptr;
@@ -181,6 +177,7 @@ __forceinline HANDLE GetRHICommandFence(int index)
 	return index == 0 ? sFence0 : sFence1;
 }
 
+extern int GRHIFenceIndex;
 struct RHICommandFence : public RHICommandBase
 {
 	int mFenceIndex;
@@ -195,8 +192,6 @@ struct RHICommandFence : public RHICommandBase
 		SetEvent(GetRHICommandFence(mFenceIndex));
 	}
 };
-
-extern int GRHIFenceIndex;
 
 class RHIExecuteCommandListTask : public TaskBase
 {
@@ -248,7 +243,7 @@ public:
 	//		: mBuffer(vb)
 	//	{
 	//		mData = new char[mBuffer->mSize];
-	//		// UE4’‚∏ˆµÿ∑Ω∑«≥£«…√Ó£¨∏˙CommandList”√µƒ «Õ¨“ªøÈƒ⁄¥Ê£¨commandlistÃ·ΩªÕÍresetµƒ ±∫Ú“ª∆πÈªπƒ⁄¥Ê.
+	//		// UE4ÔøΩÔøΩÔøΩÔøΩÿ∑ÔøΩÔøΩ«≥ÔøΩÔøΩÔøΩÔøΩÓ£¨ÔøΩÔøΩCommandListÔøΩ√µÔøΩÔøΩÔøΩÕ¨“ªÔøΩÔøΩÔøΩ⁄¥Ê£¨commandlistÔøΩ·ΩªÔøΩÔøΩresetÔøΩÔøΩ ±ÔøΩÔøΩ“ªÔøΩÔøΩÈªπÔøΩ⁄¥ÔøΩ.
 	//		memcpy(mData, data, mBuffer->mSize);
 	//	}
 
@@ -274,7 +269,7 @@ public:
 	//};
 
 	VertexBuffer(unsigned int size, EResouceUsage usage, void* data)
-		: mSize(size), mVAO(0), mUsage(usage)
+		: mSize(size), mVAO(0), mUsage(usage), mIsLocked(false), mLockedBuffer(nullptr)
 	{
 		CreateGLBuffer(data);
 	}
@@ -288,58 +283,62 @@ public:
 	{
 		void* buffer = nullptr;
 
+		mIsLocked = true;
+		mLockMode = lockMode;
+
+		unsigned int mode = GL_READ_WRITE;
+		if (lockMode == ELM_READ)
+			mode = GL_READ_ONLY;
+		else if (lockMode == ELM_WRITE)
+			mode = GL_WRITE_ONLY;
+
 		if (!GbUseRHI)
 		{
 			Bind();
 
-			unsigned int mode = GL_READ_WRITE;
-			if (lockMode == ELM_READ)
-				mode = GL_READ_ONLY;
-			else if (lockMode == ELM_WRITE)
-				mode = GL_WRITE_ONLY;
-
 			buffer = glMapBuffer(GL_ARRAY_BUFFER, mode);
+			CHECK_GL_ERROR();
 		}
 		else
 		{
-			// readonly.
-			auto cmd = [&]()
+			if (mode != GL_WRITE_ONLY)
 			{
-				Bind();
+				auto cmd = [&]()
+				{
+					Bind();
 
-				unsigned int mode = GL_READ_WRITE;
-				if (lockMode == ELM_READ)
-					mode = GL_READ_ONLY;
-				else if (lockMode == ELM_WRITE)
-					mode = GL_WRITE_ONLY;
+					buffer = glMapBuffer(GL_ARRAY_BUFFER, mode);
+					CHECK_GL_ERROR();
+					LOG_OUTPUT()
+				};
 
-				buffer = glMapBuffer(GL_ARRAY_BUFFER, mode);
+				GetCommandList().AllocCommand(new RHIOpenGLCommand(cmd));
+
+				// SetEvent.
+				auto waitCmd = [=]()
+				{
+					LOG_OUTPUT()
+					SetEvent(GetRHIEvent());
+				};
+
+				GetCommandList().AllocCommand(new RHIOpenGLCommand(waitCmd));
+
+				RHICommandList* swapCmdLists = new RHICommandList();
 				LOG_OUTPUT()
-			};
+				GetCommandList().ExchangeCmdList(*swapCmdLists);
+				// Add Task.
+				AddTask(new RHIExecuteCommandListTask(swapCmdLists));
+				LOG_OUTPUT()
 
-			GetCommandList().AllocCommand(new RHIOpenGLCommand(cmd));
-
-			// ÷¥––ÕÍ»ŒŒÒ÷Æ∫Û£¨SetEvent.
-			auto waitCmd = [=]()
+				WaitForSingleObject(GetRHIEvent(), INFINITE);
+			}
+			else
 			{
-				LOG_OUTPUT()
-				SetEvent(GetRHIEvent());
-			};
+				buffer = new char[mSize];
+				mLockedBuffer = buffer;
 
-			GetCommandList().AllocCommand(new RHIOpenGLCommand(waitCmd));
-
-			// ∑÷∑¢∏¯RHIœﬂ≥Ã÷¥––°£
-			RHICommandList* swapCmdLists = new RHICommandList();
-			LOG_OUTPUT()
-			GetCommandList().ExchangeCmdList(*swapCmdLists);
-			// Add Task.
-
-			AddTask(new RHIExecuteCommandListTask(swapCmdLists));
-			LOG_OUTPUT()
-			// µ»¥˝»ŒŒÒ÷¥––ÕÍ±œ°£
-			WaitForSingleObject(GetRHIEvent(), INFINITE);
-			int a = 1;
-			int b = a + 1;
+				return buffer;
+			}
 		}
 
 		return buffer;
@@ -347,6 +346,7 @@ public:
 
 	void Unlock()
 	{
+		assert(mIsLocked);
 		if (!GbUseRHI)
 		{
 			Bind();
@@ -354,19 +354,49 @@ public:
 		}
 		else
 		{
-			auto cmd = [=]()
+			if (mLockMode != ELM_WRITE)
 			{
-				Bind();
-				glUnmapBuffer(GL_ARRAY_BUFFER);
-			};
+				auto cmd = [=]()
+				{
+					Bind();
+					CHECK_GL_ERROR();
+					glUnmapBuffer(GL_ARRAY_BUFFER);
+					CHECK_GL_ERROR();
+				};
 
-			GetCommandList().AllocCommand(new RHIOpenGLCommand(cmd));
+				GetCommandList().AllocCommand(new RHIOpenGLCommand(cmd));
+			}
+			else
+			{
+				auto cmd = [=]()
+				{
+					unsigned int usage = GL_STATIC_DRAW;
+					if (mUsage == ERU_Dynamic)
+						usage = GL_DYNAMIC_DRAW;
+
+					CHECK_GL_ERROR()
+					glBufferData(GL_ARRAY_BUFFER, mSize, mLockedBuffer, usage);
+					CHECK_GL_ERROR()
+
+					delete[] mLockedBuffer;
+					mLockedBuffer = nullptr;
+				};
+
+				GetCommandList().AllocCommand(new RHIOpenGLCommand(cmd));
+			}
 		}
+
+		mIsLocked = false;
 	}
 
 	void Bind()
 	{
 		glBindBuffer(GL_ARRAY_BUFFER, mVBO);
+	}
+
+	unsigned int GetSize() const
+	{
+		return mSize;
 	}
 
 	void SetupVertexArray(IndexBuffer* ib);
@@ -400,7 +430,7 @@ private:
 
 				glBufferData(GL_ARRAY_BUFFER, mSize, buffer, usage);
 				CHECK_GL_ERROR()
-				//delete buffer;
+				delete buffer;
 			};
 
 			GetCommandList().AllocCommand(new RHIOpenGLCommand(cmd));
@@ -412,6 +442,9 @@ private:
 	unsigned int mVBO;
 	unsigned int mVAO;
 	EResouceUsage mUsage;
+	bool mIsLocked;
+	ELockMode mLockMode;
+	void* mLockedBuffer;
 };
 
 class IndexBuffer
@@ -493,7 +526,7 @@ private:
 
 				glBufferData(GL_ELEMENT_ARRAY_BUFFER, mSize, buffer, usage);
 				CHECK_GL_ERROR()
-				//delete buffer;
+				delete buffer;
 			};
 
 			GetCommandList().AllocCommand(new RHIOpenGLCommand(cmd));

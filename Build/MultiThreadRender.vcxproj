@@ -22,6 +22,7 @@
     <ClCompile Include="..\Source\MultiThreadRender.cpp" />
     <ClCompile Include="..\Source\Private\RHI.cpp" />
     <ClCompile Include="..\Source\Private\RHICommandList.cpp" />
+    <ClCompile Include="..\Source\Private\Task.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\Shaders\sprite.ps" />
@@ -29,11 +30,17 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Source\Public\CommonBase.h" />
+    <ClInclude Include="..\Source\Public\Event.h" />
+    <ClInclude Include="..\Source\Public\IndexBuffer.h" />
     <ClInclude Include="..\Source\Public\OpenGLProgram.h" />
     <ClInclude Include="..\Source\Public\OpenGLRHI.h" />
     <ClInclude Include="..\Source\Public\RHI.h" />
     <ClInclude Include="..\Source\Public\RHICommandList.h" />
+    <ClInclude Include="..\Source\Public\RHIIncludes.h" />
+    <ClInclude Include="..\Source\Public\RHIResouce.h" />
     <ClInclude Include="..\Source\Public\Semaphore.h" />
+    <ClInclude Include="..\Source\Public\Task.h" />
+    <ClInclude Include="..\Source\Public\VertexBuffer.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

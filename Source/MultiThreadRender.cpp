@@ -1,28 +1,15 @@
-﻿#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-#include <iostream>
+﻿#include <iostream>
 #include <thread>
 #include "Public/Semaphore.h"
-#include "Public/OpenGLProgram.h"
 #include "Public/CommonBase.h"
-#include "Public/RHICommandList.h"
-#include "Public/RHI.h"
 #include <assert.h>
 #include <queue>
 #include <functional>
+#include "Public/RHIIncludes.h"
 
 GLFWwindow* GWindow = nullptr;
 
 Semaphore mRHIInitSemaphere;
-
-void InitWindow()
-{
-	glfwInit();
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	GWindow = glfwCreateWindow(1344, 768, "MultiThreadRender", NULL, NULL);
-}
 
 VertexBuffer* gVertexBuffer;
 IndexBuffer* gIndexBuffer;
@@ -32,6 +19,12 @@ ELockMode gVertexLockMode = ELM_WRITE;
 
 void InitDevice()
 {
+	glfwInit();
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	GWindow = glfwCreateWindow(1344, 768, "MultiThreadRender", NULL, NULL);
+
 	glfwMakeContextCurrent(GWindow);
 
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
@@ -70,10 +63,6 @@ void GameThread()
 	}
 	else
 	{
-		InitWindow();
-		if (GWindow == nullptr)
-			glfwTerminate();
-
 		InitDevice();
 	}
 
@@ -140,10 +129,6 @@ void GameThread()
 
 void RHIThread()
 {
-	InitWindow();
-	if (GWindow == nullptr)
-		glfwTerminate();
-
 	InitDevice();
 	mRHIInitSemaphere.notify();
 

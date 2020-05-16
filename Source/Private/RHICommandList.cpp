@@ -1,10 +1,10 @@
 #include "../Public/RHICommandList.h"
 #include "../Public/RHI.h"
 #include "../Public/CommonBase.h"
+#include "../Public/VertexBuffer.h"
+#include "../Public/IndexBuffer.h"
 
-LockFreeQueue<TaskBase*> GRHITasks;
 int GRHIFenceIndex = 0;
-DynamicRHIState GDynamicRHIState;
 
 void RHICommandList::ExchangeCmdList(RHICommandList& cmdList)
 {

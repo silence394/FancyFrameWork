@@ -28,6 +28,9 @@
     <ClCompile Include="..\Source\MultiThreadRender.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="..\Source\Private\Task.cpp">
+      <Filter>Source\Private</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Source\Public\OpenGLProgram.h">
@@ -46,6 +49,24 @@
       <Filter>Source\Source</Filter>
     </ClInclude>
     <ClInclude Include="..\Source\Public\CommonBase.h">
+      <Filter>Source\Source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Public\RHIResouce.h">
+      <Filter>Source\Source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Public\Task.h">
+      <Filter>Source\Source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Public\Event.h">
+      <Filter>Source\Source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Public\IndexBuffer.h">
+      <Filter>Source\Source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Public\VertexBuffer.h">
+      <Filter>Source\Source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Public\RHIIncludes.h">
       <Filter>Source\Source</Filter>
     </ClInclude>
   </ItemGroup>

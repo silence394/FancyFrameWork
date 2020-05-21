@@ -9,7 +9,7 @@
 
 GLFWwindow* GWindow = nullptr;
 
-Semaphore mRHIInitSemaphere;
+Event* gRHIInitEvent;
 
 VertexBuffer* gVertexBuffer;
 IndexBuffer* gIndexBuffer;
@@ -59,7 +59,9 @@ void GameThread()
 {
 	if (GbUseRHI)
 	{
-		mRHIInitSemaphere.wait();
+		gRHIInitEvent->Wait();
+		delete gRHIInitEvent;
+		gRHIInitEvent = nullptr;
 	}
 	else
 	{
@@ -130,12 +132,14 @@ void GameThread()
 void RHIThread()
 {
 	InitDevice();
-	mRHIInitSemaphere.notify();
+	gRHIInitEvent->Notify();
+
+	GetRHICommandFence(0).Notify();
+	GetRHICommandFence(1).Notify();
 
 	while (!glfwWindowShouldClose(GWindow))
 	{
 		static int count = 1;
-		//std::cout << "rhi count ~~~~~~~~~$$$$$$$$$$$$$$$$$$$" << count++ << std::endl;
 
 		// Really ExecuteCommands.
 		TaskBase* task = GRHITasks.Pop();
@@ -158,6 +162,8 @@ void OnClose()
 
 int main()
 {
+	gRHIInitEvent = new Event();
+
 	std::thread gameThread = std::thread(GameThread);
 	if (GbUseRHI)
 	{

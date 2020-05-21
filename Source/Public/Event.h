@@ -1,35 +1,59 @@
 #pragma once
 
-// TODO.
-__forceinline HANDLE GetRHIEvent()
+#include <assert.h>
+
+#ifdef WIN32
+
+class Event
 {
-	static HANDLE sRHIEvent = nullptr;
-	if (sRHIEvent == nullptr)
+public:
+	Event()
 	{
-		sRHIEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+		mEvent = CreateEvent(nullptr, false, 0, nullptr);
 	}
 
+	~Event()
+	{
+		if (mEvent != nullptr)
+			CloseHandle(mEvent);
+	}
+
+	void Wait(unsigned int time = 0xffffffff)
+	{
+		WaitForSingleObject(mEvent, time);
+	}
+
+	void Notify()
+	{
+		SetEvent(mEvent);
+	}
+
+private:
+	HANDLE mEvent;
+};
+
+#else
+
+class Event
+{
+public:
+	Event() {}
+	~Event() {}
+};
+
+#endif
+
+// TODO.
+__forceinline Event& GetRHIEvent()
+{
+	static Event sRHIEvent;
 	return sRHIEvent;
 }
 
-__forceinline HANDLE GetRHICommandFence(int index)
+__forceinline Event& GetRHICommandFence(int index)
 {
-	static HANDLE sFence0 = nullptr;
-	if (sFence0 == nullptr)
-	{
-		sFence0 = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-		SetEvent(sFence0);
-	}
-
-	static HANDLE sFence1 = nullptr;
-	if (sFence1 == nullptr)
-	{
-		sFence1 = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-		SetEvent(sFence1);
-	}
-
-	if (index != 0 && index != 1)
-		return nullptr;
-
+	assert(index == 0 || index == 1);
+	static Event sFence0;
+	static Event sFence1;
 	return index == 0 ? sFence0 : sFence1;
 }

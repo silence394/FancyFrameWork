@@ -94,7 +94,7 @@ public:
 				auto waitCmd = [=]()
 				{
 					LOG_OUTPUT()
-						SetEvent(GetRHIEvent());
+					GetRHIEvent().Notify();
 				};
 
 				GetCommandList().AllocCommand(new RHIOpenGLCommand(waitCmd));
@@ -106,7 +106,7 @@ public:
 				AddTask(new RHIExecuteCommandListTask(swapCmdLists));
 				LOG_OUTPUT()
 
-					WaitForSingleObject(GetRHIEvent(), INFINITE);
+				GetRHIEvent().Wait();
 			}
 			else
 			{

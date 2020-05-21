@@ -83,15 +83,14 @@ void RHICommandList::RHIEndDrawViewport(void* window)
 	else
 	{
 		mCommandLists.push_back(new RHICommandEndDrawViewport(win));
-		mCommandLists.push_back(new RHICommandFence(GRHIFenceIndex));
+		mCommandLists.push_back(new RHICommandRHIThreadFence(GRHIFenceIndex));
 	}
 
 	if (GbUseRHI)
 	{
 		int preIndex = 1 - GRHIFenceIndex;
-		HANDLE fence = GetRHICommandFence(preIndex);
 		LOG_OUTPUT()
-		WaitForSingleObject(fence, INFINITE);
+		GetRHICommandFence(preIndex).Wait();
 		LOG_OUTPUT()
 		GRHIFenceIndex = preIndex;
 	}

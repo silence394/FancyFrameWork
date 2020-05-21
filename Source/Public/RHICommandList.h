@@ -70,10 +70,10 @@ __forceinline RHICommandList& GetCommandList()
 }
 
 extern int GRHIFenceIndex;
-struct RHICommandFence : public RHICommandBase
+struct RHICommandRHIThreadFence : public RHICommandBase
 {
 	int mFenceIndex;
-	RHICommandFence(int index)
+	RHICommandRHIThreadFence(int index)
 		: mFenceIndex(index)
 	{
 	}
@@ -81,7 +81,7 @@ struct RHICommandFence : public RHICommandBase
 	void Execute()
 	{
 		LOG_OUTPUT()
-		SetEvent(GetRHICommandFence(mFenceIndex));
+		GetRHICommandFence(mFenceIndex).Notify();
 	}
 };
 

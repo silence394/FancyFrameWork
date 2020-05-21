@@ -36,7 +36,7 @@ class RHICommandList
 public:
 	void ExchangeCmdList(RHICommandList& cmdList);
 	void Execute();
-	void ExcuteInnter();
+	void ExecuteInner();
 
 	void RHIBeginDrawViewport();
 	void RHIEndDrawViewport(void* window);
@@ -95,7 +95,7 @@ public:
 
 	virtual void DoTask()
 	{
-		mCmdList->ExcuteInnter();
+		mCmdList->ExecuteInner();
 
 		delete mCmdList;
 		mCmdList = nullptr;

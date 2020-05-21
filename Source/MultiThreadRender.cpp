@@ -118,14 +118,7 @@ void GameThread()
 		GetCommandList().DrawIndexedPrimitive(gIndexBuffer);
 		GetCommandList().RHIEndDrawViewport(GWindow);
 
-		if (GbUseRHI)
-		{
-			// ExcuteCommandlist.
-			RHICommandList* swapCmdLists = new RHICommandList();
-			LOG_OUTPUT()
-			GetCommandList().ExchangeCmdList(*swapCmdLists);
-			AddTask(new RHIExecuteCommandListTask(swapCmdLists));
-		}
+		GetCommandList().Execute();
 	}
 }
 

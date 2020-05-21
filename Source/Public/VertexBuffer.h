@@ -98,14 +98,7 @@ public:
 				};
 
 				GetCommandList().AllocCommand(new RHIOpenGLCommand(waitCmd));
-
-				RHICommandList* swapCmdLists = new RHICommandList();
-				LOG_OUTPUT()
-					GetCommandList().ExchangeCmdList(*swapCmdLists);
-				// Add Task.
-				AddTask(new RHIExecuteCommandListTask(swapCmdLists));
-				LOG_OUTPUT()
-
+				GetCommandList().Execute();
 				GetRHIEvent().Wait();
 			}
 			else

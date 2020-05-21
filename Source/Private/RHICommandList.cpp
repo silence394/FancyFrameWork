@@ -9,21 +9,20 @@ int GRHIFenceIndex = 0;
 void RHICommandList::ExchangeCmdList(RHICommandList& cmdList)
 {
 	std::swap(*this, cmdList);
-
-	LOG_OUTPUT()
 }
 
 void RHICommandList::Execute()
 {
 	if (GbUseRHI)
 	{
-		std::list<RHICommandBase*> swaplists;
-
-		std::swap(swaplists, mCommandLists);
+			// ExcuteCommandlist.
+		RHICommandList* swapCmdLists = new RHICommandList();
+		GetCommandList().ExchangeCmdList(*swapCmdLists);
+		AddTask(new RHIExecuteCommandListTask(swapCmdLists));
 	}
 	else
 	{
-		ExcuteInnter();
+		ExecuteInner();
 	}
 }
 
@@ -96,7 +95,7 @@ void RHICommandList::RHIEndDrawViewport(void* window)
 	}
 }
 
-void RHICommandList::ExcuteInnter()
+void RHICommandList::ExecuteInner()
 {
 	for (std::list<RHICommandBase*>::iterator it = mCommandLists.begin(); it != mCommandLists.end(); it++)
 		(*it)->Execute();

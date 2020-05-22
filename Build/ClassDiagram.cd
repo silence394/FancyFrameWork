@@ -1,0 +1,123 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ClassDiagram MajorVersion="1" MinorVersion="1">
+  <Class Name="Color" Collapsed="true">
+    <Position X="10" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoAQABgAAAAAA=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Public\CommonBase.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="Event" Collapsed="true">
+    <Position X="11.75" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAEAAAAAAAAgQAAAhAAAAAAAAAAAA=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Public\Event.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="IndexBuffer" Collapsed="true">
+    <Position X="13.5" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>gIAQgAAAABAAAACAQAIAEQABAAAAAAAAAAAAAIAAAAA=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Public\IndexBuffer.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="OpenGLProgram" Collapsed="true">
+    <Position X="10" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAA=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Public\OpenGLProgram.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="RHICommandList" Collapsed="true">
+    <Position X="11.75" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AIgAAADAAAAABARgAIABAAAABCABCAAAAQAAAACAAAE=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Public\RHICommandList.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="RHIExecuteCommandListTask" Collapsed="true">
+    <Position X="0.5" Y="4.75" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAgAgAAAAAAAAAAAAAAAAgAAAA=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Public\RHICommandList.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="Semaphore" Collapsed="true">
+    <Position X="13.5" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAACAAAoAAAAAAAAAEAAAAAEAAAAQAAAAAA=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Public\Semaphore.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="TaskBase" Collapsed="true">
+    <Position X="0.5" Y="3.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAA=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Public\Task.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="VertexBuffer" Collapsed="true">
+    <Position X="10" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>gJAQgAAAABAAAACAQAIBAAQAAAAAAAAAACAAAIAAEAA=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Public\VertexBuffer.h</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Struct Name="RHICommandBeginDrawViewport" Collapsed="true">
+    <Position X="0.75" Y="1.75" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAQAAAAAAAAACAAAAAAAAAAAAAAAAQA=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Private\RHICommandList.cpp</FileName>
+    </TypeIdentifier>
+  </Struct>
+  <Struct Name="RHICommandEndDrawViewport" Collapsed="true">
+    <Position X="5.25" Y="1.75" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AgAAAAAAAAAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Private\RHICommandList.cpp</FileName>
+    </TypeIdentifier>
+  </Struct>
+  <Struct Name="DynamicRHIState" Collapsed="true">
+    <Position X="10" Y="3.75" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAg=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Public\RHI.h</FileName>
+    </TypeIdentifier>
+  </Struct>
+  <Struct Name="RHICommandBase" Collapsed="true">
+    <Position X="4" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Public\RHICommandList.h</FileName>
+    </TypeIdentifier>
+  </Struct>
+  <Struct Name="RHIOpenGLCommand" Collapsed="true">
+    <Position X="7.5" Y="1.75" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAQAAQAAAAAAAAAAAAAEAAAAAAAAAAA=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Public\RHICommandList.h</FileName>
+    </TypeIdentifier>
+  </Struct>
+  <Struct Name="RHICommandRHIThreadFence" Collapsed="true">
+    <Position X="3" Y="1.75" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>IAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAE=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Public\RHICommandList.h</FileName>
+    </TypeIdentifier>
+  </Struct>
+  <Enum Name="EResouceUsage" Collapsed="true">
+    <Position X="11.75" Y="5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>ACAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAA=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Public\RHIResouce.h</FileName>
+    </TypeIdentifier>
+  </Enum>
+  <Enum Name="ELockMode" Collapsed="true">
+    <Position X="10" Y="5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAEAAAAAAAAAAAAAAAAAAIAAAAAAAAAAIAAAAAAAAAA=</HashCode>
+      <FileName>E:\FancyFrameWork\FancyFrameWork-liaolong\Source\Public\RHIResouce.h</FileName>
+    </TypeIdentifier>
+  </Enum>
+  <Font Name="Microsoft YaHei UI" Size="9" />
+</ClassDiagram>

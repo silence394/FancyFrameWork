@@ -118,7 +118,7 @@ void GameThread()
 		GetCommandList().DrawIndexedPrimitive(gIndexBuffer);
 		GetCommandList().RHIEndDrawViewport(GWindow);
 
-		GetCommandList().Execute();
+		GetCommandList().Flush();
 	}
 }
 

@@ -11,7 +11,7 @@ void RHICommandList::ExchangeCmdList(RHICommandList& cmdList)
 	std::swap(*this, cmdList);
 }
 
-void RHICommandList::Execute()
+void RHICommandList::Flush()
 {
 	if (GbUseRHI)
 	{

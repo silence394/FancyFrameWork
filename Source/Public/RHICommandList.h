@@ -35,7 +35,7 @@ class RHICommandList
 {
 public:
 	void ExchangeCmdList(RHICommandList& cmdList);
-	void Execute();
+	void Flush();
 	void ExecuteInner();
 
 	void RHIBeginDrawViewport();

@@ -93,12 +93,11 @@ public:
 				// SetEvent.
 				auto waitCmd = [=]()
 				{
-					LOG_OUTPUT()
 					GetRHIEvent().Notify();
 				};
 
 				GetCommandList().AllocCommand(new RHIOpenGLCommand(waitCmd));
-				GetCommandList().Execute();
+				GetCommandList().Flush();
 				GetRHIEvent().Wait();
 			}
 			else

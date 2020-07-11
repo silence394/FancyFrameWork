@@ -20,7 +20,7 @@ struct RHIOpenGLCommand : public RHICommandBase
 	RHIOpenGLCommand(std::function<void()> func)
 		: mFunc(func) {}
 
-	void Execute()
+	virtual void Execute()
 	{
 		mFunc();
 	}
